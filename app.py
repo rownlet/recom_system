@@ -45,7 +45,7 @@ merged_data_encoded = pd.concat([data.drop(columns=['district', 'category']), en
 # Paso 6: Crear la matriz de compras (comercios vs productos)
 purchase_matrix = transactions_group.pivot_table(index='id_commerce', columns='id_product', values='quantity', aggfunc='sum', fill_value=0)
 
-# Normalizar los valores de quantity en la matriz de compras
+# Normalizar los valores de quantity en la matriz de compras solo para Coseno y KNN
 scaler = MinMaxScaler()
 purchase_matrix_scaled = pd.DataFrame(scaler.fit_transform(purchase_matrix), index=purchase_matrix.index, columns=purchase_matrix.columns)
 
@@ -62,22 +62,21 @@ id_commerce_seleccionado = st.selectbox('Selecciona el comercio', comercios_en_c
 # Widget para seleccionar el modelo
 modelo_seleccionado = st.selectbox('Selecciona el modelo de recomendación', ['Jaccard', 'Coseno', 'KNN'])
 
-# Función para calcular la similitud de Jaccard
+# Función para calcular la similitud de Jaccard (sin normalización)
 def jaccard_similarity(commerce1, commerce2):
     intersection = np.sum(np.minimum(commerce1, commerce2))
     union = np.sum(np.maximum(commerce1, commerce2))
     return intersection / union
 
-# Eliminamos la función de normalización adicional, ya que la matriz ya está normalizada.
 # Función para obtener productos personalizados basados en similitud de Jaccard
 def obtener_productos_jaccard(id_commerce, top_n=10):
-    if id_commerce not in purchase_matrix_scaled.index:
+    if id_commerce not in purchase_matrix.index:  # Utilizar la matriz sin normalizar
         return f"El comercio con ID {id_commerce} no existe."
 
-    target_commerce = purchase_matrix_scaled.loc[id_commerce]
+    target_commerce = purchase_matrix.loc[id_commerce]  # Sin normalización para Jaccard
     
     # Calcular la similitud de Jaccard con todos los demás comercios
-    similarities = purchase_matrix_scaled.apply(lambda x: jaccard_similarity(target_commerce, x), axis=1)
+    similarities = purchase_matrix.apply(lambda x: jaccard_similarity(target_commerce, x), axis=1)
     
     # Excluir el comercio mismo
     similarities = similarities.drop(id_commerce)
@@ -86,13 +85,13 @@ def obtener_productos_jaccard(id_commerce, top_n=10):
     most_similar_commerce = similarities.idxmax()
     
     # Obtener los productos más comprados por el comercio más similar
-    similar_products = purchase_matrix_scaled.loc[most_similar_commerce]
+    similar_products = purchase_matrix.loc[most_similar_commerce]
     
     return generar_recomendaciones(id_commerce, similar_products, top_n)
 
-# Función para obtener productos personalizados basados en similitud de Coseno
+# Función para obtener productos personalizados basados en similitud de Coseno (usando la matriz normalizada)
 def obtener_productos_coseno(id_commerce, top_n=10):
-    if id_commerce not in purchase_matrix_scaled.index:
+    if id_commerce not in purchase_matrix_scaled.index:  # Utilizar la matriz normalizada
         return f"El comercio con ID {id_commerce} no existe."
     
     # Calcular similitudes de coseno con todos los demás comercios
@@ -110,9 +109,9 @@ def obtener_productos_coseno(id_commerce, top_n=10):
     
     return generar_recomendaciones(id_commerce, similar_products, top_n)
 
-# Función para obtener productos personalizados basados en KNN
+# Función para obtener productos personalizados basados en KNN (usando la matriz normalizada)
 def obtener_productos_knn(id_commerce, top_n=10):
-    if id_commerce not in purchase_matrix_scaled.index:
+    if id_commerce not in purchase_matrix_scaled.index:  # Utilizar la matriz normalizada
         return f"El comercio con ID {id_commerce} no existe."
     
     # Entrenar el modelo KNN con métrica de coseno
@@ -133,7 +132,13 @@ def obtener_productos_knn(id_commerce, top_n=10):
     
     return generar_recomendaciones(id_commerce, similar_products, top_n)
 
-# Función para generar recomendaciones de productos
+# Función para normalizar los scores entre 0 y 1
+def normalizar_scores(df, score_column):
+    scaler = MinMaxScaler()
+    df[score_column] = scaler.fit_transform(df[[score_column]])
+    return df
+
+# Función para generar recomendaciones de productos con normalización de scores
 def generar_recomendaciones(id_commerce, similar_products, top_n=10):
     # Obtener los productos comprados por el comercio
     productos_comercio = transacciones[transacciones['id_commerce'] == id_commerce]
@@ -151,14 +156,15 @@ def generar_recomendaciones(id_commerce, similar_products, top_n=10):
         axis=1
     )
     
-    # Los scores ya están normalizados, por lo que no realizamos una normalización extra.
+    # Normalizar los scores entre 0 y 1
+    productos_ajustados = normalizar_scores(productos_ajustados, 'adjusted_score')
     
     # Ordenar los productos por la popularidad ajustada y seleccionar los top N
     top_recommendations = productos_ajustados.sort_values(by='adjusted_score', ascending=False).head(top_n)
     
     # Devolver las recomendaciones
     return top_recommendations[['id_product', 'adjusted_score', 'category', 'price']]
-
+    
 # Mostrar recomendaciones
 if st.button('Mostrar recomendaciones'):
     if modelo_seleccionado == 'Jaccard':
