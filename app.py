@@ -174,9 +174,8 @@ if st.button('Mostrar recomendaciones'):
     else:
         recomendaciones = obtener_productos_knn(id_commerce_seleccionado)
 
-    # Reiniciar el índice del DataFrame de recomendaciones
+    # Reiniciar el índice del DataFrame de recomendaciones y mostrar el DataFrame
     recomendaciones = recomendaciones.reset_index(drop=True)
-    recomendaciones.index
     
     st.write(f"Recomendaciones para el comercio {id_commerce_seleccionado}:")
-    st.write(recomendaciones)
+    st.dataframe(recomendaciones)  # Mostrar recomendaciones en un formato tabular
