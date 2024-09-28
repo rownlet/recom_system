@@ -185,6 +185,10 @@ if st.button('Mostrar recomendaciones'):
         recomendaciones = obtener_productos_coseno(id_commerce_seleccionado)
     else:
         recomendaciones = obtener_productos_knn(id_commerce_seleccionado)
+
+    # Reiniciar el índice del DataFrame de recomendaciones
+    recomendaciones = recomendaciones.reset_index(drop=True)
+    recomendaciones.index = recomendaciones.index
     
     st.write(f"Recomendaciones para el comercio {id_commerce_seleccionado}:")
     st.write(recomendaciones)
