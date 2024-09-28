@@ -19,7 +19,7 @@ El sistema de recomendaciones está desplegado en la web y puede ser accedido en
 
 1. Clonar este repositorio:
     ```
-    git clone <url_del_repositorio>
+    git clone https://github.com/rownlet/recom_system
     ```
 
 2. Instalar las dependencias:
