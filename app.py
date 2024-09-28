@@ -59,7 +59,11 @@ encoded_df = pd.DataFrame(encoded_columns, columns=encoder.get_feature_names_out
 merged_data_encoded = pd.concat([clean_data.drop(columns=['district', 'category']), encoded_df], axis=1)
 
 # Paso 6: Crear la matriz de compras (comercios vs productos)
-purchase_matrix = transactions_group.pivot_table(index='id_commerce', columns='id_product', values='quantity', fill_value=0)
+purchase_matrix = transactions_group.pivot_table(index='id_commerce', columns='id_product', values='quantity', aggfunc='sum', fill_value=0)
+
+# Normalizar los valores de quantity en la matriz de compras
+scaler = MinMaxScaler()
+purchase_matrix_scaled = pd.DataFrame(scaler.fit_transform(purchase_matrix), index=purchase_matrix.index, columns=purchase_matrix.columns)
 
 # Widget para seleccionar la comuna
 comunas_disponibles = comercios['district'].unique().tolist()
@@ -113,11 +117,11 @@ def obtener_productos_coseno(id_commerce, top_n=10):
         return f"El comercio con ID {id_commerce} no existe."
     
     # Calcular similitudes de coseno con todos los demás comercios
-    knn = NearestNeighbors(n_neighbors=5, metric='cosine')
+    knn = NearestNeighbors(n_neighbors=10, metric='cosine')
     knn.fit(purchase_matrix)
     
     # Encontrar los comercios más cercanos usando la similitud de coseno
-    distances, indices = knn.kneighbors([purchase_matrix.loc[id_commerce]], n_neighbors=5)
+    distances, indices = knn.kneighbors([purchase_matrix.loc[id_commerce]], n_neighbors=10)
     
     # Excluir el comercio mismo
     most_similar_commerce = purchase_matrix.index[indices.flatten()[1]]
@@ -133,14 +137,14 @@ def obtener_productos_knn(id_commerce, top_n=10):
         return f"El comercio con ID {id_commerce} no existe."
     
     # Entrenar el modelo KNN con métrica de coseno
-    knn = NearestNeighbors(n_neighbors=5, metric='cosine')
+    knn = NearestNeighbors(n_neighbors=10, metric='cosine')
     knn.fit(purchase_matrix)
     
     # Obtener el índice del comercio seleccionado en la matriz
     selected_commerce_index = purchase_matrix.index.get_loc(id_commerce)
     
     # Encontrar los vecinos más cercanos usando KNN
-    distances, indices = knn.kneighbors([purchase_matrix.iloc[selected_commerce_index]], n_neighbors=5)
+    distances, indices = knn.kneighbors([purchase_matrix.iloc[selected_commerce_index]], n_neighbors=10)
     
     # Obtener los IDs de los comercios similares
     similar_commerces = purchase_matrix.index[indices.flatten()[1:]]  # Excluimos el comercio mismo
