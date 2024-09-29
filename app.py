@@ -68,15 +68,18 @@ def jaccard_similarity(commerce1, commerce2):
     union = np.sum(np.maximum(commerce1, commerce2))
     return intersection / union
 
-# Función para obtener productos personalizados basados en similitud de Jaccard
-def obtener_productos_jaccard(id_commerce, top_n=10):
-    if id_commerce not in purchase_matrix.index:  # Utilizar la matriz sin normalizar
-        return f"El comercio con ID {id_commerce} no existe."
-
-    target_commerce = purchase_matrix.loc[id_commerce]  # Sin normalización para Jaccard
+# Función para obtener productos personalizados basados en similitud de Jaccard (limitado por comuna)
+def obtener_productos_jaccard(id_commerce, comuna_seleccionada, top_n=10):
+    comercios_similares = comercios[comercios['district'] == comuna_seleccionada]['id_commerce']
+    purchase_matrix_local = purchase_matrix.loc[comercios_similares]
     
-    # Calcular la similitud de Jaccard con todos los demás comercios
-    similarities = purchase_matrix.apply(lambda x: jaccard_similarity(target_commerce, x), axis=1)
+    if id_commerce not in purchase_matrix_local.index:
+        return f"El comercio con ID {id_commerce} no existe en la comuna seleccionada."
+
+    target_commerce = purchase_matrix_local.loc[id_commerce]
+    
+    # Calcular la similitud de Jaccard con comercios locales
+    similarities = purchase_matrix_local.apply(lambda x: jaccard_similarity(target_commerce, x), axis=1)
     
     # Excluir el comercio mismo
     similarities = similarities.drop(id_commerce)
@@ -85,50 +88,56 @@ def obtener_productos_jaccard(id_commerce, top_n=10):
     most_similar_commerce = similarities.idxmax()
     
     # Obtener los productos más comprados por el comercio más similar
-    similar_products = purchase_matrix.loc[most_similar_commerce]
+    similar_products = purchase_matrix_local.loc[most_similar_commerce]
     
     return generar_recomendaciones(id_commerce, similar_products, top_n)
 
-# Función para obtener productos personalizados basados en similitud de Coseno (usando la matriz normalizada)
-def obtener_productos_coseno(id_commerce, top_n=10):
-    if id_commerce not in purchase_matrix_scaled.index:  # Utilizar la matriz normalizada
-        return f"El comercio con ID {id_commerce} no existe."
+# Función para obtener productos personalizados basados en similitud de Coseno (limitado por comuna)
+def obtener_productos_coseno(id_commerce, comuna_seleccionada, top_n=10):
+    comercios_similares = comercios[comercios['district'] == comuna_seleccionada]['id_commerce']
+    purchase_matrix_local = purchase_matrix_scaled.loc[comercios_similares]
     
-    # Calcular similitudes de coseno con todos los demás comercios
+    if id_commerce not in purchase_matrix_local.index:
+        return f"El comercio con ID {id_commerce} no existe en la comuna seleccionada."
+
+    # Calcular similitudes de coseno con comercios locales
     knn = NearestNeighbors(n_neighbors=10, metric='cosine')
-    knn.fit(purchase_matrix_scaled)
+    knn.fit(purchase_matrix_local)
     
     # Encontrar los comercios más cercanos usando la similitud de coseno
-    distances, indices = knn.kneighbors([purchase_matrix_scaled.loc[id_commerce]], n_neighbors=10)
+    distances, indices = knn.kneighbors([purchase_matrix_local.loc[id_commerce]], n_neighbors=10)
     
     # Excluir el comercio mismo
-    most_similar_commerce = purchase_matrix_scaled.index[indices.flatten()[1]]
+    most_similar_commerce = purchase_matrix_local.index[indices.flatten()[1]]
     
     # Obtener los productos más comprados por el comercio más similar
-    similar_products = purchase_matrix_scaled.loc[most_similar_commerce]
+    similar_products = purchase_matrix_local.loc[most_similar_commerce]
     
     return generar_recomendaciones(id_commerce, similar_products, top_n)
 
-# Función para obtener productos personalizados basados en KNN (usando la matriz normalizada)
-def obtener_productos_knn(id_commerce, top_n=10):
-    if id_commerce not in purchase_matrix_scaled.index:  # Utilizar la matriz normalizada
-        return f"El comercio con ID {id_commerce} no existe."
+# Función para obtener productos personalizados basados en KNN (limitado por comuna)
+def obtener_productos_knn(id_commerce, comuna_seleccionada, top_n=10):
+    comercios_similares = comercios[comercios['district'] == comuna_seleccionada]['id_commerce']
+    purchase_matrix_local = purchase_matrix_scaled.loc[comercios_similares]
     
+    if id_commerce not in purchase_matrix_local.index:
+        return f"El comercio con ID {id_commerce} no existe en la comuna seleccionada."
+
     # Entrenar el modelo KNN con métrica de coseno
     knn = NearestNeighbors(n_neighbors=10, metric='cosine')
-    knn.fit(purchase_matrix_scaled)
+    knn.fit(purchase_matrix_local)
     
     # Obtener el índice del comercio seleccionado en la matriz
-    selected_commerce_index = purchase_matrix_scaled.index.get_loc(id_commerce)
+    selected_commerce_index = purchase_matrix_local.index.get_loc(id_commerce)
     
     # Encontrar los vecinos más cercanos usando KNN
-    distances, indices = knn.kneighbors([purchase_matrix_scaled.iloc[selected_commerce_index]], n_neighbors=10)
+    distances, indices = knn.kneighbors([purchase_matrix_local.iloc[selected_commerce_index]], n_neighbors=10)
     
     # Obtener los IDs de los comercios similares
-    similar_commerces = purchase_matrix_scaled.index[indices.flatten()[1:]]  # Excluimos el comercio mismo
+    similar_commerces = purchase_matrix_local.index[indices.flatten()[1:]]  # Excluimos el comercio mismo
     
     # Obtener los productos más comprados por los comercios más similares
-    similar_products = purchase_matrix_scaled.loc[similar_commerces].sum(axis=0)
+    similar_products = purchase_matrix_local.loc[similar_commerces].sum(axis=0)
     
     return generar_recomendaciones(id_commerce, similar_products, top_n)
 
@@ -158,8 +167,8 @@ def generar_recomendaciones(id_commerce, similar_products, top_n=10):
     
     # Normalizar los scores entre 0 y 1
     productos_ajustados = normalizar_scores(productos_ajustados, 'adjusted_score')
-    
-    # Ordenar los productos por la popularidad ajustada y seleccionar los top N
+
+# Ordenar los productos por la popularidad ajustada y seleccionar los top N
     top_recommendations = productos_ajustados.sort_values(by='adjusted_score', ascending=False).head(top_n)
     
     # Devolver las recomendaciones
@@ -168,14 +177,14 @@ def generar_recomendaciones(id_commerce, similar_products, top_n=10):
 # Mostrar recomendaciones
 if st.button('Mostrar recomendaciones'):
     if modelo_seleccionado == 'Jaccard':
-        recomendaciones = obtener_productos_jaccard(id_commerce_seleccionado)
+        recomendaciones = obtener_productos_jaccard(id_commerce_seleccionado, comuna_seleccionada)
     elif modelo_seleccionado == 'Coseno':
-        recomendaciones = obtener_productos_coseno(id_commerce_seleccionado)
+        recomendaciones = obtener_productos_coseno(id_commerce_seleccionado, comuna_seleccionada)
     else:
-        recomendaciones = obtener_productos_knn(id_commerce_seleccionado)
+        recomendaciones = obtener_productos_knn(id_commerce_seleccionado, comuna_seleccionada)
 
     # Reiniciar el índice del DataFrame de recomendaciones y mostrar el DataFrame
     recomendaciones = recomendaciones.reset_index(drop=True)
     
-    st.write(f"Recomendaciones para el comercio {id_commerce_seleccionado}:")
+    st.write(f"Recomendaciones para el comercio {id_commerce_seleccionado} en la comuna {comuna_seleccionada}:")
     st.dataframe(recomendaciones)  # Mostrar recomendaciones en un formato tabular
